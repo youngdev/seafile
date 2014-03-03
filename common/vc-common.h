@@ -40,6 +40,7 @@ char *
 gen_conflict_path (const char *origin_path);
 
 char *
-get_last_changer_of_file (const char *head, const char *path);
+get_last_changer_of_file (const char *repo_id, int version,
+                          const char *head, const char *path);
 
 #endif

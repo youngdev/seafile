@@ -239,7 +239,9 @@ retry:
         goto out;
     }
 
-    size = seaf_fs_manager_get_fs_size (sched->seaf->fs_mgr, head->root_id);
+    size = seaf_fs_manager_get_fs_size (sched->seaf->fs_mgr,
+                                        repo->store_id, repo->version,
+                                        head->root_id);
     if (size < 0) {
         g_warning ("[scheduler] Failed to compute size of repo %.8s.\n",
                    repo->id);

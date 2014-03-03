@@ -179,6 +179,32 @@ load_clone_enc_info (CloneTask *task)
 }
 
 static gboolean
+load_version_info_cb (sqlite3_stmt *stmt, void *data)
+{
+    CloneTask *task = data;
+    int repo_version;
+
+    repo_version = sqlite3_column_int (stmt, 0);
+
+    task->enc_version = enc_version;
+
+    return FALSE;
+}
+
+static void
+load_clone_repo_version_info (CloneTask *task)
+{
+    char sql[256];
+
+    snprintf (sql, sizeof(sql),
+              "SELECT repo_version FROM CloneVersionInfo WHERE repo_id='%s'",
+              task->repo_id);
+
+    sqlite_foreach_selected_row (task->manager->db, sql,
+                                 load_version_info_cb, task);
+}
+
+static gboolean
 restart_task (sqlite3_stmt *stmt, void *data)
 {
     SeafCloneManager *mgr = data;
@@ -208,6 +234,9 @@ restart_task (sqlite3_stmt *stmt, void *data)
         clone_task_free (task);
         return TRUE;
     }
+
+    task->repo_version = 0;
+    load_clone_repo_version_info (task);
 
     repo = seaf_repo_manager_get_repo (seaf->repo_mgr, repo_id);
     if (repo != NULL) {
@@ -257,6 +286,11 @@ seaf_clone_manager_init (SeafCloneManager *mgr)
 
     sql = "CREATE TABLE IF NOT EXISTS CloneEncInfo "
         "(repo_id TEXT PRIMARY KEY, enc_version INTEGER, random_key TEXT);";
+    if (sqlite_query_exec (mgr->db, sql) < 0)
+        return -1;
+
+    sql = "CREATE TABLE IF NOT EXISTS CloneVersionInfo "
+        "(repo_id TEXT PRIMARY KEY, repo_version INTEGER);";
     if (sqlite_query_exec (mgr->db, sql) < 0)
         return -1;
 
@@ -347,8 +381,17 @@ save_task_to_db (SeafCloneManager *mgr, CloneTask *task)
             sqlite3_free (sql);
             return -1;
         }
-        sqlite3_free (sql);        
+        sqlite3_free (sql);
     }
+
+    sql = sqlite3_mprintf ("REPLACE INTO CloneVersionInfo VALUES "
+                           "('%q', %d)",
+                           task->repo_id, task->repo_version);
+    if (sqlite_query_exec (mgr->db, sql) < 0) {
+        sqlite3_free (sql);
+        return -1;
+    }
+    sqlite3_free (sql);
 
     return 0;
 }
@@ -366,6 +409,12 @@ remove_task_from_db (SeafCloneManager *mgr, const char *repo_id)
 
     snprintf (sql, sizeof(sql), 
               "DELETE FROM CloneEncInfo WHERE repo_id='%s'",
+              repo_id);
+    if (sqlite_query_exec (mgr->db, sql) < 0)
+        return -1;
+
+    snprintf (sql, sizeof(sql), 
+              "DELETE FROM CloneVersionInfo WHERE repo_id='%s'",
               repo_id);
     if (sqlite_query_exec (mgr->db, sql) < 0)
         return -1;
@@ -410,6 +459,7 @@ add_transfer_task (CloneTask *task, GError **error)
 {
     task->tx_id = seaf_transfer_manager_add_download (seaf->transfer_mgr,
                                                       task->repo_id,
+                                                      task->repo_version,
                                                       task->peer_id,
                                                       "fetch_head",
                                                       "master",
@@ -798,6 +848,7 @@ static char *
 add_task_common (SeafCloneManager *mgr, 
                  SeafRepo *repo,
                  const char *repo_id,
+                 int repo_version,
                  const char *peer_id,
                  const char *repo_name,
                  const char *token,
@@ -818,6 +869,7 @@ add_task_common (SeafCloneManager *mgr,
     task->manager = mgr;
     task->enc_version = enc_version;
     task->random_key = g_strdup (random_key);
+    task->repo_version = repo_version;
 
     if (save_task_to_db (mgr, task) < 0) {
         seaf_warning ("[Clone mgr] failed to save task.\n");
@@ -876,6 +928,7 @@ check_encryption_args (const char *magic, int enc_version, const char *random_ke
 char *
 seaf_clone_manager_add_task (SeafCloneManager *mgr, 
                              const char *repo_id,
+                             int repo_version,
                              const char *peer_id,
                              const char *repo_name,
                              const char *token,
@@ -938,7 +991,8 @@ seaf_clone_manager_add_task (SeafCloneManager *mgr,
     if (!repo)
         seaf_repo_manager_remove_repo_ondisk (seaf->repo_mgr, repo_id);
 
-    ret = add_task_common (mgr, repo, repo_id, peer_id, repo_name, token, passwd,
+    ret = add_task_common (mgr, repo, repo_id, repo_version,
+                           peer_id, repo_name, token, passwd,
                            enc_version, random_key,
                            worktree, peer_addr, peer_port, email, error);
     g_free (worktree);
@@ -970,6 +1024,7 @@ make_worktree_for_download (SeafCloneManager *mgr,
 char *
 seaf_clone_manager_add_download_task (SeafCloneManager *mgr, 
                                       const char *repo_id,
+                                      int repo_version,
                                       const char *peer_id,
                                       const char *repo_name,
                                       const char *token,
@@ -1029,7 +1084,8 @@ seaf_clone_manager_add_download_task (SeafCloneManager *mgr,
     if (!repo)
         seaf_repo_manager_remove_repo_ondisk (seaf->repo_mgr, repo_id);
 
-    ret = add_task_common (mgr, repo, repo_id, peer_id, repo_name, token, passwd,
+    ret = add_task_common (mgr, repo, repo_id, repo_version,
+                           peer_id, repo_name, token, passwd,
                            enc_version, random_key,
                            worktree, peer_addr, peer_port, email, error);
     g_free (worktree);
@@ -1199,6 +1255,8 @@ real_merge (SeafRepo *repo, SeafCommit *head, CloneTask *task)
     }
 
     init_merge_options (&opts);
+    memcpy (opts.repo_id, repo->id, 36);
+    opts.version = repo->version;
     opts.index = &istate;
     opts.worktree = task->worktree;
     opts.ancestor = "common ancestor";
@@ -1254,10 +1312,12 @@ fast_forward_checkout (SeafRepo *repo, SeafCommit *head, CloneTask *task)
     }
     repo->index_corrupted = FALSE;
 
-    fill_tree_descriptor (&trees[0], task->root_id);
-    fill_tree_descriptor (&trees[1], head->root_id);
+    fill_tree_descriptor (repo->id, repo->version, &trees[0], task->root_id);
+    fill_tree_descriptor (repo->id, repo->version, &trees[1], head->root_id);
 
     memset(&topts, 0, sizeof(topts));
+    memcpy (topts.repo_id, repo->id, 36);
+    topts.version = repo->version;
     topts.base = task->worktree;
     topts.head_idx = -1;
     topts.src_index = &istate;

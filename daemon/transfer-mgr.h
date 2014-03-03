@@ -119,6 +119,7 @@ struct _TransferTask {
     struct _SeafTransferManager *manager;
     char         tx_id[37];
     char         repo_id[37];
+    int          repo_version;
     char        *token;
     char        *session_token;
     int          protocol_version;
@@ -214,6 +215,7 @@ int seaf_transfer_manager_start (SeafTransferManager *manager);
 char *
 seaf_transfer_manager_add_download (SeafTransferManager *manager,
                                     const char *repo_id,
+                                    int repo_version,
                                     const char *peer_id,
                                     const char *from_branch,
                                     const char *to_branch,
@@ -223,6 +225,7 @@ seaf_transfer_manager_add_download (SeafTransferManager *manager,
 char *
 seaf_transfer_manager_add_upload (SeafTransferManager *manager,
                                   const char *repo_id,
+                                  int repo_version,
                                   const char *peer_id,
                                   const char *from_branch,
                                   const char *to_branch,

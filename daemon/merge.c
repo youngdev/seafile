@@ -39,6 +39,8 @@ do_real_merge (SeafRepo *repo,
     }
 
     init_merge_options (&opts);
+    memcpy (opts.repo_id, repo->id, 36);
+    opts.version = repo->version;
     opts.index = &istate;
     opts.worktree = repo->worktree;
     opts.ancestor = "common ancestor";
@@ -261,10 +263,12 @@ get_new_blocks_ff (SeafRepo *repo,
         return -1;
     }
 
-    fill_tree_descriptor (&trees[0], head->root_id);
-    fill_tree_descriptor (&trees[1], remote->root_id);
+    fill_tree_descriptor (repo->id, repo->version, &trees[0], head->root_id);
+    fill_tree_descriptor (repo->id, repo->version, &trees[1], remote->root_id);
 
     memset(&topts, 0, sizeof(topts));
+    memcpy (topts.repo_id, repo->id, 36);
+    topts.version = repo->version;
     topts.base = repo->worktree;
     topts.head_idx = -1;
     topts.src_index = &istate;
@@ -280,7 +284,7 @@ get_new_blocks_ff (SeafRepo *repo,
     }
 
     *bl = block_list_new ();
-    collect_new_blocks_from_index (&topts.result, *bl);
+    collect_new_blocks_from_index (repo->id, repo->version, &topts.result, *bl);
 
 out:
     tree_desc_free (&trees[0]);
@@ -314,6 +318,8 @@ get_new_blocks_merge (SeafRepo *repo,
     }
 
     init_merge_options (&opts);
+    memcpy (opts.repo_id, repo->id, 36);
+    opts.version = repo->version;
     opts.index = &istate;
     opts.worktree = repo->worktree;
     opts.ancestor = "common ancestor";

@@ -329,7 +329,10 @@ diff_parents_with_path (SeafCommit *commit,
     char *file_id_p1 = NULL, *file_id_p2 = NULL;
     int ret = 0;
 
-    p1 = seaf_commit_manager_get_commit (seaf->commit_mgr, commit->parent_id);
+    p1 = seaf_commit_manager_get_commit (seaf->commit_mgr,
+                                         commit->repo_id,
+                                         commit->version,
+                                         commit->parent_id);
     if (!p1) {
         g_warning ("Failed to find commit %s.\n", commit->parent_id);
         g_set_error (error, SEAFILE_DOMAIN, SEAF_ERR_GENERAL, " ");
@@ -343,6 +346,8 @@ diff_parents_with_path (SeafCommit *commit,
 
     if (commit->second_parent_id) {
         p2 = seaf_commit_manager_get_commit (seaf->commit_mgr,
+                                             commit->repo_id,
+                                             commit->version,
                                              commit->second_parent_id);
         if (!p2) {
             g_warning ("Failed to find commit %s.\n", commit->second_parent_id);
@@ -354,9 +359,11 @@ diff_parents_with_path (SeafCommit *commit,
 
     if (!p2) {
         file_id_p1 = seaf_fs_manager_path_to_obj_id (seaf->fs_mgr,
-                                                      p1->root_id, path,
-                                                      NULL,
-                                                      error);
+                                                     commit->repo_id,
+                                                     commit->version,
+                                                     p1->root_id, path,
+                                                     NULL,
+                                                     error);
         if (*error)
             goto out;
         if (!file_id_p1 || strcmp (file_id, file_id_p1) != 0)
@@ -365,13 +372,17 @@ diff_parents_with_path (SeafCommit *commit,
             memcpy (parent, p1->commit_id, 41);
     } else {
         file_id_p1 = seaf_fs_manager_path_to_obj_id (seaf->fs_mgr,
-                                                      p1->root_id, path,
-                                                      NULL, error);
+                                                     commit->repo_id,
+                                                     commit->version,
+                                                     p1->root_id, path,
+                                                     NULL, error);
         if (*error)
             goto out;
         file_id_p2 = seaf_fs_manager_path_to_obj_id (seaf->fs_mgr,
-                                                      p2->root_id, path,
-                                                      NULL, error);
+                                                     commit->repo_id,
+                                                     commit->version,
+                                                     p2->root_id, path,
+                                                     NULL, error);
         if (*error)
             goto out;
 
@@ -416,7 +427,8 @@ out:
  * @path: path of the file.
  */
 char *
-get_last_changer_of_file (const char *head, const char *path)
+get_last_changer_of_file (const char *repo_id, int version,
+                          const char *head, const char *path)
 {
     char commit_id[41];
     SeafCommit *commit = NULL;
@@ -428,7 +440,9 @@ get_last_changer_of_file (const char *head, const char *path)
     memcpy (commit_id, head, 41);
 
     while (1) {
-        commit = seaf_commit_manager_get_commit (seaf->commit_mgr, commit_id);
+        commit = seaf_commit_manager_get_commit (seaf->commit_mgr,
+                                                 repo_id, version,
+                                                 commit_id);
         if (!commit)
             break;
 
@@ -437,10 +451,11 @@ get_last_changer_of_file (const char *head, const char *path)
             break;
 
         file_id = seaf_fs_manager_path_to_obj_id (seaf->fs_mgr,
-                                                   commit->root_id,
-                                                   path,
-                                                   NULL,
-                                                   &error);
+                                                  repo_id, version,
+                                                  commit->root_id,
+                                                  path,
+                                                  NULL,
+                                                  &error);
         if (error) {
             g_clear_error (&error);
             break;

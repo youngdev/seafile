@@ -94,12 +94,15 @@ send_commit_start (CcnetProcessor *processor, int argc, char **argv)
 static void
 send_commit (CcnetProcessor *processor, const char *object_id)
 {
+    TransferTask *task = ((SeafileSendcommitV2Proc *)processor)->tx_task;
+    SeafRepo *repo = task->repo;
     char *data;
     int len;
     ObjectPack *pack = NULL;
     int pack_size;
 
     if (seaf_obj_store_read_obj (seaf->commit_mgr->obj_store,
+                                 repo->id, repo->version,
                                  object_id, (void**)&data, &len) < 0) {
         g_warning ("Failed to read commit %s.\n", object_id);
         goto fail;

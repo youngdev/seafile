@@ -240,6 +240,8 @@ seaf_repo_manager_create_virtual_repo (SeafRepoManager *mgr,
     }
 
     dir_id = seaf_fs_manager_get_seafdir_id_by_path (seaf->fs_mgr,
+                                                     origin_repo->store_id,
+                                                     origin_repo->version,
                                                      origin_head->root_id,
                                                      path, NULL);
     if (!dir_id) {
@@ -541,6 +543,8 @@ seaf_repo_manager_cleanup_virtual_repos (SeafRepoManager *mgr,
     for (ptr = vinfo_list; ptr; ptr = ptr->next) {
         vinfo = ptr->data;
         dir = seaf_fs_manager_get_seafdir_by_path (seaf->fs_mgr,
+                                                   repo->store_id,
+                                                   repo->version,
                                                    head->root_id,
                                                    vinfo->path,
                                                    &error);
@@ -617,6 +621,8 @@ static void *merge_virtual_repo (void *vtask)
     root = head->root_id;
 
     base_root = seaf_fs_manager_get_seafdir_id_by_path (seaf->fs_mgr,
+                                                        orig_repo->store_id,
+                                                        orig_repo->version,
                                                         base->root_id,
                                                         vinfo->path,
                                                         NULL);
@@ -628,6 +634,8 @@ static void *merge_virtual_repo (void *vtask)
     }
 
     orig_root = seaf_fs_manager_get_seafdir_id_by_path (seaf->fs_mgr,
+                                                        orig_repo->store_id,
+                                                        orig_repo->version,
                                                         orig_head->root_id,
                                                         vinfo->path,
                                                         NULL);
@@ -702,7 +710,7 @@ static void *merge_virtual_repo (void *vtask)
         roots[2] = root;  /* remote */
 
         /* Merge virtual into origin */
-        if (seaf_merge_trees (3, roots, &opt) < 0) {
+        if (seaf_merge_trees (orig_repo->id, orig_repo->version, 3, roots, &opt) < 0) {
             seaf_warning ("Failed to merge virtual repo %.10s.\n", repo_id);
             ret = -1;
             goto out;

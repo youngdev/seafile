@@ -458,7 +458,8 @@ do_file(evhtp_request_t *req, SeafRepo *repo, const char *file_id,
     SeafileCrypt *crypt = NULL;
     SendfileData *data;
 
-    file = seaf_fs_manager_get_seafile(seaf->fs_mgr, file_id);
+    file = seaf_fs_manager_get_seafile(seaf->fs_mgr,
+                                       repo->store_id, repo->version, file_id);
     if (file == NULL)
         return -1;
 
@@ -579,7 +580,9 @@ do_dir (evhtp_request_t *req, SeafRepo *repo, const char *dir_id,
     gint64 dir_size = 0;
 
     /* ensure file size does not exceed limit */
-    dir_size = seaf_fs_manager_get_fs_size (seaf->fs_mgr, dir_id);
+    dir_size = seaf_fs_manager_get_fs_size (seaf->fs_mgr,
+                                            repo->store_id, repo->version,
+                                            dir_id);
     if (dir_size < 0 || dir_size > seaf->max_download_dir_size) {
         seaf_warning ("invalid dir size: %"G_GINT64_FORMAT"\n", dir_size);
         ret = -1;
@@ -609,7 +612,8 @@ do_dir (evhtp_request_t *req, SeafRepo *repo, const char *dir_id,
         g_free (iv_hex);
     }
 
-    zipfile = pack_dir (filename_escaped, dir_id, crypt, test_windows(req));
+    zipfile = pack_dir (repo->store_id, repo->version,
+                        filename_escaped, dir_id, crypt, test_windows(req));
     if (!zipfile) {
         ret = -1;
         goto out;
@@ -783,7 +787,8 @@ access_cb(evhtp_request_t *req, void *arg)
         }
     }
 
-    if (!seaf_fs_manager_object_exists (seaf->fs_mgr, id)) {
+    if (!seaf_fs_manager_object_exists (seaf->fs_mgr,
+                                        repo->store_id, repo->version, id)) {
         error = "Invalid file id\n";
         goto bad_req;
     }
@@ -842,7 +847,8 @@ do_block(evhtp_request_t *req, SeafRepo *repo, const char *file_id,
     char cont_filename[SEAF_PATH_MAX];
     SendBlockData *data;
 
-    file = seaf_fs_manager_get_seafile(seaf->fs_mgr, file_id);
+    file = seaf_fs_manager_get_seafile(seaf->fs_mgr,
+                                       repo->store_id, repo->version, file_id);
     if (file == NULL)
         return -1;
 
@@ -993,7 +999,8 @@ access_blks_cb(evhtp_request_t *req, void *arg)
         goto bad_req;
     }
 
-    if (!seaf_fs_manager_object_exists (seaf->fs_mgr, id)) {
+    if (!seaf_fs_manager_object_exists (seaf->fs_mgr,
+                                        repo->store_id, repo->version, id)) {
         error = "Invalid file id\n";
         goto bad_req;
     }

@@ -69,6 +69,8 @@ struct _SeafRepo {
     unsigned int  net_browsable : 1;
     unsigned int  quota_full_notified : 1;
     unsigned int  access_denied_notified : 1;
+
+    int version;
 };
 
 
@@ -108,6 +110,7 @@ seaf_repo_index_add (SeafRepo *repo, const char *path);
 
 int
 seaf_repo_index_worktree_files (const char *repo_id,
+                                int version,
                                 const char *worktree,
                                 const char *passwd,
                                 int enc_version,

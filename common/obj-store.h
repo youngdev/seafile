@@ -20,12 +20,16 @@ seaf_obj_store_init (struct SeafObjStore *obj_store,
 
 int
 seaf_obj_store_read_obj (struct SeafObjStore *obj_store,
+                         const char *repo_id,
+                         int version,
                          const char *obj_id,
                          void **data,
                          int *len);
 
 int
 seaf_obj_store_write_obj (struct SeafObjStore *obj_store,
+                          const char *repo_id,
+                          int version,
                           const char *obj_id,
                           void *data,
                           int len,
@@ -33,16 +37,22 @@ seaf_obj_store_write_obj (struct SeafObjStore *obj_store,
 
 gboolean
 seaf_obj_store_obj_exists (struct SeafObjStore *obj_store,
+                           const char *repo_id,
+                           int version,
                            const char *obj_id);
 
 void
 seaf_obj_store_delete_obj (struct SeafObjStore *obj_store,
+                           const char *repo_id,
+                           int version,
                            const char *obj_id);
 
 typedef gboolean (*SeafObjFunc) (const char *obj_id, void *user_data);
 
 int
 seaf_obj_store_foreach_obj (struct SeafObjStore *obj_store,
+                            const char *repo_id,
+                            int version,
                             SeafObjFunc process,
                             void *user_data);
 
@@ -62,7 +72,9 @@ typedef void (*OSAsyncCallback) (OSAsyncResult *res, void *cb_data);
 /* Async read */
 guint32
 seaf_obj_store_register_async_read (struct SeafObjStore *obj_store,
-                                    OSAsyncCallback callback,
+                                    const char *repo_id,
+                                    int version,
+                                    osasynccallback callback,
                                     void *cb_data);
 
 void
@@ -77,6 +89,8 @@ seaf_obj_store_async_read (struct SeafObjStore *obj_store,
 /* Async write */
 guint32
 seaf_obj_store_register_async_write (struct SeafObjStore *obj_store,
+                                     const char *repo_id,
+                                     int version,
                                      OSAsyncCallback callback,
                                      void *cb_data);
 
@@ -95,6 +109,8 @@ seaf_obj_store_async_write (struct SeafObjStore *obj_store,
 /* Async stat */
 guint32
 seaf_obj_store_register_async_stat (struct SeafObjStore *obj_store,
+                                    const char *repo_id,
+                                    int version,
                                     OSAsyncCallback callback,
                                     void *cb_data);
 

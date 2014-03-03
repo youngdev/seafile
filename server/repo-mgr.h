@@ -46,6 +46,15 @@ struct _SeafRepo {
     int         ref_cnt;
 
     SeafVirtRepo *virtual_info;
+
+    int version;
+    /* Used to access fs and block sotre.
+     * This id is different from repo_id when this repo is virtual.
+     * Virtual repos share fs and block store with its origin repo.
+     * However, commit store for each repo is always independent.
+     * So always use repo_id to access commit store.
+     */
+    gchar       store_id[37];
 };
 
 gboolean is_repo_id_valid (const char *id);

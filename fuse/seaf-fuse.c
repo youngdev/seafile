@@ -139,7 +139,9 @@ static int seaf_fuse_open(const char *path, struct fuse_file_info *info)
         goto out;
     }
 
-    char *id = seaf_fs_manager_path_to_obj_id(seaf->fs_mgr, commit->root_id,
+    char *id = seaf_fs_manager_path_to_obj_id(seaf->fs_mgr,
+                                              repo->store_id, repo->version,
+                                              commit->root_id,
                                               repo_path, &mode, NULL);
     if (!id) {
         seaf_warning ("Path %s doesn't exist in repo %s.\n", repo_path, repo_id);
@@ -202,7 +204,9 @@ static int seaf_fuse_read(const char *path, char *buf, size_t size,
         goto out;
     }
 
-    file_id = seaf_fs_manager_get_seafile_id_by_path(seaf->fs_mgr, commit->root_id,
+    file_id = seaf_fs_manager_get_seafile_id_by_path(seaf->fs_mgr,
+                                                     repo->store_id, repo->version,
+                                                     commit->root_id,
                                                      repo_path, NULL);
     if (!file_id) {
         seaf_warning ("Path %s doesn't exist in repo %s.\n", repo_path, repo_id);
@@ -210,7 +214,8 @@ static int seaf_fuse_read(const char *path, char *buf, size_t size,
         goto out;
     }
 
-    file = seaf_fs_manager_get_seafile(seaf->fs_mgr, file_id);
+    file = seaf_fs_manager_get_seafile(seaf->fs_mgr,
+                                       repo->store_id, repo->version, file_id);
     if (!file) {
         ret = -ENOENT;
         goto out;

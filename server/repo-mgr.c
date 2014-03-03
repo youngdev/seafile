@@ -158,6 +158,7 @@ seaf_repo_from_commit (SeafRepo *repo, SeafCommit *commit)
         }
     }
     repo->no_local_history = commit->no_local_history;
+    repo->version = commit->version;
 }
 
 void
@@ -176,6 +177,7 @@ seaf_repo_to_commit (SeafRepo *repo, SeafCommit *commit)
         }
     }
     commit->no_local_history = repo->no_local_history;
+    commit->version = repo->version;
 }
 
 static gboolean
@@ -557,8 +559,9 @@ load_repo_commit (SeafRepoManager *manager,
 {
     SeafCommit *commit;
 
-    commit = seaf_commit_manager_get_commit (manager->seaf->commit_mgr,
-                                             branch->commit_id);
+    commit = seaf_commit_manager_get_commit_compatible (manager->seaf->commit_mgr,
+                                                        repo->id,
+                                                        branch->commit_id);
     if (!commit) {
         seaf_warning ("Commit %s is missing\n", branch->commit_id);
         repo->is_corrupted = TRUE;
@@ -604,6 +607,10 @@ load_repo (SeafRepoManager *manager, const char *repo_id, gboolean ret_corrupt)
 
     /* Load virtual repo info if any. */
     repo->virtual_info = seaf_repo_manager_get_virtual_repo_info (manager, repo_id);
+    if (repo->virtual_info)
+        memcpy (repo->store_id, repo->virtual_info->origin_reop_id, 36);
+    else
+        memcpy (repo->store_id, repo->id, 36);
 
     return repo;
 }

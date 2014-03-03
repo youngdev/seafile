@@ -403,7 +403,9 @@ typedef int (*IndexCB) (const char *path,
                         struct SeafileCrypt *crypt,
                         gboolean write_data);
 
-int add_to_index(struct index_state *istate,
+int add_to_index(const char *repo_id,
+                 int version,
+                 struct index_state *istate,
                  const char *path,
                  const char *full_path,
                  SeafStat *st,

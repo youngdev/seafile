@@ -126,17 +126,10 @@ seaf_fs_manager_init (SeafFSManager *mgr);
 
 #ifndef SEAFILE_SERVER
 
-char *
-seaf_fs_manager_checkin (SeafFSManager *mgr,
-                         const char *path);
-
-int 
-seaf_fs_manager_checkout (SeafFSManager *mgr,
-                          const char *root_id,
-                          const char *output_path);
-
 int 
 seaf_fs_manager_checkout_file (SeafFSManager *mgr, 
+                               const char *repo_id,
+                               int version,
                                const char *file_id, 
                                const char *file_path,
                                guint32 mode,
@@ -153,6 +146,8 @@ seaf_fs_manager_checkout_file (SeafFSManager *mgr,
  */
 int
 seaf_fs_manager_index_file_blocks (SeafFSManager *mgr,
+                                   const char *repo_id,
+                                   int version,
                                    GList *paths,
                                    GList *blockids,
                                    unsigned char sha1[],
@@ -160,27 +155,37 @@ seaf_fs_manager_index_file_blocks (SeafFSManager *mgr,
 
 int
 seaf_fs_manager_index_blocks (SeafFSManager *mgr,
+                              const char *repo_id,
+                              int version,
                               const char *file_path,
                               unsigned char sha1[],
                               SeafileCrypt *crypt,
                               gboolean write_data);
 
-uint32_t
-seaf_fs_manager_get_type (SeafFSManager *mgr, const char *id);
-
 Seafile *
-seaf_fs_manager_get_seafile (SeafFSManager *mgr, const char *file_id);
+seaf_fs_manager_get_seafile (SeafFSManager *mgr,
+                             const char *repo_id,
+                             int version,
+                             const char *file_id);
 
 SeafDir *
-seaf_fs_manager_get_seafdir (SeafFSManager *mgr, const char *dir_id);
+seaf_fs_manager_get_seafdir (SeafFSManager *mgr,
+                             const char *repo_id,
+                             int version,
+                             const char *dir_id);
 
 /* Make sure entries in the returned dir is sorted in descending order.
  */
 SeafDir *
-seaf_fs_manager_get_seafdir_sorted (SeafFSManager *mgr, const char *dir_id);
+seaf_fs_manager_get_seafdir_sorted (SeafFSManager *mgr,
+                                    const char *repo_id,
+                                    int version,
+                                    const char *dir_id);
 
 int
 seaf_fs_manager_populate_blocklist (SeafFSManager *mgr,
+                                    const char *repo_id,
+                                    int version,
                                     const char *root_id,
                                     BlockList *bl);
 
@@ -188,6 +193,8 @@ seaf_fs_manager_populate_blocklist (SeafFSManager *mgr,
  * For dir object, set *stop to TRUE to stop traversing the subtree.
  */
 typedef gboolean (*TraverseFSTreeCallback) (SeafFSManager *mgr,
+                                            const char *repo_id,
+                                            int version,
                                             const char *obj_id,
                                             int type,
                                             void *user_data,
@@ -195,19 +202,30 @@ typedef gboolean (*TraverseFSTreeCallback) (SeafFSManager *mgr,
 
 int
 seaf_fs_manager_traverse_tree (SeafFSManager *mgr,
+                               const char *repo_id,
+                               int version,
                                const char *root_id,
                                TraverseFSTreeCallback callback,
                                void *user_data,
                                gboolean skip_errors);
 
 gboolean
-seaf_fs_manager_object_exists (SeafFSManager *mgr, const char *id);
+seaf_fs_manager_object_exists (SeafFSManager *mgr,
+                               const char *repo_id,
+                               int version,
+                               const char *id);
 
 gint64
-seaf_fs_manager_get_file_size (SeafFSManager *mgr, const char *file_id);
+seaf_fs_manager_get_file_size (SeafFSManager *mgr,
+                               const char *repo_id,
+                               int version,
+                               const char *file_id);
 
 gint64
-seaf_fs_manager_get_fs_size (SeafFSManager *mgr, const char *root_id);
+seaf_fs_manager_get_fs_size (SeafFSManager *mgr,
+                             const char *repo_id,
+                             int version,
+                             const char *root_id);
 
 #ifndef SEAFILE_SERVER
 int
@@ -225,28 +243,39 @@ uint32_t
 calculate_chunk_size (uint64_t total_size);
 
 int
-seaf_fs_manager_count_fs_files (SeafFSManager *mgr, const char *root_id);
+seaf_fs_manager_count_fs_files (SeafFSManager *mgr,
+                                const char *repo_id,
+                                int version,
+                                const char *root_id);
 
 SeafDir *
 seaf_fs_manager_get_seafdir_by_path(SeafFSManager *mgr,
+                                    const char *repo_id,
+                                    int version,
                                     const char *root_id,
                                     const char *path,
                                     GError **error);
 char *
 seaf_fs_manager_get_seafile_id_by_path (SeafFSManager *mgr,
+                                        const char *repo_id,
+                                        int version,
                                         const char *root_id,
                                         const char *path,
                                         GError **error);
 
 char *
 seaf_fs_manager_path_to_obj_id (SeafFSManager *mgr,
-                                 const char *root_id,
-                                 const char *path,
-                                 guint32 *mode,
-                                 GError **error);
+                                const char *repo_id,
+                                int version,
+                                const char *root_id,
+                                const char *path,
+                                guint32 *mode,
+                                GError **error);
 
 char *
 seaf_fs_manager_get_seafdir_id_by_path (SeafFSManager *mgr,
+                                        const char *repo_id,
+                                        int version,
                                         const char *root_id,
                                         const char *path,
                                         GError **error);
@@ -255,18 +284,24 @@ seaf_fs_manager_get_seafdir_id_by_path (SeafFSManager *mgr,
 
 gboolean
 seaf_fs_manager_verify_seafdir (SeafFSManager *mgr,
+                                const char *repo_id,
+                                int version,
                                 const char *dir_id,
                                 gboolean verify_id,
                                 gboolean *io_error);
 
 gboolean
 seaf_fs_manager_verify_seafile (SeafFSManager *mgr,
+                                const char *repo_id,
+                                int version,
                                 const char *file_id,
                                 gboolean verify_id,
                                 gboolean *io_error);
 
 gboolean
 seaf_fs_manager_verify_object (SeafFSManager *mgr,
+                               const char *repo_id,
+                               int version,
                                const char *obj_id,
                                gboolean verify_id,
                                gboolean *io_error);

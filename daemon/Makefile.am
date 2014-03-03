@@ -21,8 +21,6 @@ proc_headers = $(addprefix processors/, \
 	check-tx-proc.h \
 	check-tx-v2-proc.h \
 	check-tx-v3-proc.h \
-	getcommit-proc.h \
-	sendcommit-proc.h \
 	sendfs-proc.h \
 	getfs-proc.h \
 	getblock-proc.h \
@@ -36,8 +34,6 @@ proc_headers = $(addprefix processors/, \
 	notifysync-slave-proc.h \
 	sync-repo-slave-proc.h \
 	check-tx-slave-proc.h \
-	putcommit-proc.h  \
-	putfs-proc.h \
 	getcommit-v2-proc.h \
 	sendcommit-v2-proc.h \
 	sendcommit-v3-proc.h \
@@ -110,8 +106,6 @@ common_src = \
 	processors/check-tx-proc.c \
 	processors/check-tx-v2-proc.c \
 	processors/check-tx-v3-proc.c \
-	processors/getcommit-proc.c \
-	processors/sendcommit-proc.c \
 	processors/sendfs-proc.c \
 	processors/getfs-proc.c \
 	processors/getblock-proc.c \
@@ -125,8 +119,6 @@ common_src = \
 	processors/sync-repo-proc.c \
 	processors/sync-repo-slave-proc.c \
 	processors/check-tx-slave-proc.c \
-	processors/putcommit-proc.c \
-	processors/putfs-proc.c \
 	processors/getcommit-v2-proc.c \
 	processors/sendcommit-v2-proc.c \
 	processors/sendcommit-v3-proc.c \

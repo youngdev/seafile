@@ -218,6 +218,8 @@ checkout_blk_error:
 
 int
 seaf_fs_manager_checkout_file (SeafFSManager *mgr,
+                               const char *repo_id,
+                               int version,
                                const char *file_id,
                                const char *file_path,
                                guint32 mode,
@@ -235,7 +237,7 @@ seaf_fs_manager_checkout_file (SeafFSManager *mgr,
 
     *conflicted = FALSE;
 
-    seafile = seaf_fs_manager_get_seafile (mgr, file_id);
+    seafile = seaf_fs_manager_get_seafile (mgr, repo_id, version, file_id);
     if (!seafile) {
         g_warning ("File %s does not exist.\n", file_id);
         return -1;
@@ -299,6 +301,8 @@ bad:
 
 static int
 write_seafile (SeafFSManager *fs_mgr,
+               const char *repo_id,
+               int version,
                CDCFileDescriptor *cdc)
 {
     char seafile_id[41];
@@ -315,7 +319,7 @@ write_seafile (SeafFSManager *fs_mgr,
     ondisk->file_size = hton64 (cdc->file_size);
     memcpy (ondisk->block_ids, cdc->blk_sha1s, cdc->block_nr * 20);
 
-    if (seaf_obj_store_write_obj (fs_mgr->obj_store, seafile_id,
+    if (seaf_obj_store_write_obj (fs_mgr->obj_store, repo_id, version, seafile_id,
                                   ondisk, ondisk_size, FALSE) < 0)
         ret = -1;
     g_free (ondisk);
@@ -430,6 +434,8 @@ create_cdc_for_empty_file (CDCFileDescriptor *cdc)
 
 int
 seaf_fs_manager_index_blocks (SeafFSManager *mgr,
+                              const char *repo_id,
+                              int version,
                               const char *file_path,
                               unsigned char sha1[],
                               SeafileCrypt *crypt,
@@ -462,7 +468,7 @@ seaf_fs_manager_index_blocks (SeafFSManager *mgr,
         memcpy (sha1, cdc.file_sum, 20);
     }
 
-    if (write_data && write_seafile (mgr, &cdc) < 0) {
+    if (write_data && write_seafile (mgr, repo_id, version, &cdc) < 0) {
         g_warning ("Failed to write seafile for %s.\n", file_path);
         return -1;
     }
@@ -561,6 +567,8 @@ init_file_cdc (CDCFileDescriptor *cdc, int block_nr, gint64 file_size)
 
 int
 seaf_fs_manager_index_file_blocks (SeafFSManager *mgr,
+                                   const char *repo_id,
+                                   int version,
                                    GList *paths,
                                    GList *blockids,
                                    unsigned char sha1[],
@@ -589,7 +597,7 @@ seaf_fs_manager_index_file_blocks (SeafFSManager *mgr,
         memcpy (sha1, cdc.file_sum, CHECKSUM_LENGTH);
     }
 
-    if (write_seafile (mgr, &cdc) < 0) {
+    if (write_seafile (mgr, repo_id, version, &cdc) < 0) {
         seaf_warning ("Failed to write seafile.\n");
         ret = -1;
         goto out;
@@ -684,7 +692,10 @@ seafile_unref (Seafile *seafile)
 }
 
 Seafile *
-seaf_fs_manager_get_seafile (SeafFSManager *mgr, const char *file_id)
+seaf_fs_manager_get_seafile (SeafFSManager *mgr,
+                             const char *repo_id,
+                             int version,
+                             const char *file_id)
 {
     void *data;
     int len;
@@ -705,7 +716,8 @@ seaf_fs_manager_get_seafile (SeafFSManager *mgr, const char *file_id)
         return seafile;
     }
 
-    if (seaf_obj_store_read_obj (mgr->obj_store, file_id, &data, &len) < 0) {
+    if (seaf_obj_store_read_obj (mgr->obj_store, repo_id, version,
+                                 file_id, &data, &len) < 0) {
         g_warning ("[fs mgr] Failed to read file %s.\n", file_id);
         return NULL;
     }
@@ -902,7 +914,10 @@ seaf_dir_to_data (SeafDir *dir, int *len)
 }
 
 int
-seaf_dir_save (SeafFSManager *fs_mgr, SeafDir *dir)
+seaf_dir_save (SeafFSManager *fs_mgr,
+               const char *repo_id,
+               int version,
+               SeafDir *dir)
 {
     void *data;
     int len;
@@ -914,7 +929,7 @@ seaf_dir_save (SeafFSManager *fs_mgr, SeafDir *dir)
 
     data = seaf_dir_to_data (dir, &len);
 
-    if (seaf_obj_store_write_obj (fs_mgr->obj_store, dir->dir_id,
+    if (seaf_obj_store_write_obj (fs_mgr->obj_store, repo_id, version, dir->dir_id,
                                   data, len, FALSE) < 0)
         ret = -1;
 
@@ -924,7 +939,10 @@ seaf_dir_save (SeafFSManager *fs_mgr, SeafDir *dir)
 }
 
 SeafDir *
-seaf_fs_manager_get_seafdir (SeafFSManager *mgr, const char *dir_id)
+seaf_fs_manager_get_seafdir (SeafFSManager *mgr,
+                             const char *repo_id,
+                             int version,
+                             const char *dir_id)
 {
     void *data;
     int len;
@@ -938,7 +956,8 @@ seaf_fs_manager_get_seafdir (SeafFSManager *mgr, const char *dir_id)
         return dir;
     }
 
-    if (seaf_obj_store_read_obj (mgr->obj_store, dir_id, &data, &len) < 0) {
+    if (seaf_obj_store_read_obj (mgr->obj_store, repo_id, version,
+                                 dir_id, &data, &len) < 0) {
         g_warning ("[fs mgr] Failed to read dir %s.\n", dir_id);
         return NULL;
     }
@@ -981,9 +1000,12 @@ is_dirents_sorted (GList *dirents)
 }
 
 SeafDir *
-seaf_fs_manager_get_seafdir_sorted (SeafFSManager *mgr, const char *dir_id)
+seaf_fs_manager_get_seafdir_sorted (SeafFSManager *mgr,
+                                    const char *repo_id,
+                                    int version,
+                                    const char *dir_id)
 {
-    SeafDir *dir = seaf_fs_manager_get_seafdir(mgr, dir_id);
+    SeafDir *dir = seaf_fs_manager_get_seafdir(mgr, repo_id, version, dir_id);
 
     if (!dir)
         return NULL;
@@ -1116,6 +1138,8 @@ block_list_difference (BlockList *bl1, BlockList *bl2)
 
 static int
 traverse_file (SeafFSManager *mgr,
+               const char *repo_id,
+               int version,
                const char *id,
                TraverseFSTreeCallback callback,
                void *user_data,
@@ -1126,7 +1150,7 @@ traverse_file (SeafFSManager *mgr,
     if (memcmp (id, EMPTY_SHA1, 40) == 0)
         return 0;
 
-    if (!callback (mgr, id, SEAF_METADATA_TYPE_FILE, user_data, &stop) &&
+    if (!callback (mgr, repo_id, version, id, SEAF_METADATA_TYPE_FILE, user_data, &stop) &&
         !skip_errors)
         return -1;
 
@@ -1135,6 +1159,8 @@ traverse_file (SeafFSManager *mgr,
 
 static int
 traverse_dir (SeafFSManager *mgr,
+              const char *repo_id,
+              int version,
               const char *id,
               TraverseFSTreeCallback callback,
               void *user_data,
@@ -1152,7 +1178,7 @@ traverse_dir (SeafFSManager *mgr,
     if (stop)
         return 0;
 
-    dir = seaf_fs_manager_get_seafdir (mgr, id);
+    dir = seaf_fs_manager_get_seafdir (mgr, repo_id, version, id);
     if (!dir) {
         g_warning ("[fs-mgr]get seafdir %s failed\n", id);
         if (skip_errors)
@@ -1163,7 +1189,7 @@ traverse_dir (SeafFSManager *mgr,
         seaf_dent = (SeafDirent *)p->data;
 
         if (S_ISREG(seaf_dent->mode)) {
-            if (traverse_file (mgr, seaf_dent->id,
+            if (traverse_file (mgr, repo_id, version, seaf_dent->id,
                                callback, user_data, skip_errors) < 0) {
                 if (!skip_errors) {
                     seaf_dir_free (dir);
@@ -1171,7 +1197,7 @@ traverse_dir (SeafFSManager *mgr,
                 }
             }
         } else if (S_ISDIR(seaf_dent->mode)) {
-            if (traverse_dir (mgr, seaf_dent->id,
+            if (traverse_dir (mgr, repo_id, version, seaf_dent->id,
                               callback, user_data, skip_errors) < 0) {
                 if (!skip_errors) {
                     seaf_dir_free (dir);
@@ -1187,22 +1213,23 @@ traverse_dir (SeafFSManager *mgr,
 
 int
 seaf_fs_manager_traverse_tree (SeafFSManager *mgr,
+                               const char *repo_id,
+                               int version,
                                const char *root_id,
                                TraverseFSTreeCallback callback,
                                void *user_data,
                                gboolean skip_errors)
 {
     if (strcmp (root_id, EMPTY_SHA1) == 0) {
-#if 0
-        g_debug ("[fs-mgr] populate blocklist for empty root id\n");
-#endif
         return 0;
     }
-    return traverse_dir (mgr, root_id, callback, user_data, skip_errors);
+    return traverse_dir (mgr, repo_id, version, root_id, callback, user_data, skip_errors);
 }
 
 static gboolean
-fill_blocklist (SeafFSManager *mgr, const char *obj_id, int type,
+fill_blocklist (SeafFSManager *mgr,
+                const char *repo_id, int version,
+                const char *obj_id, int type,
                 void *user_data, gboolean *stop)
 {
     BlockList *bl = user_data;
@@ -1210,7 +1237,7 @@ fill_blocklist (SeafFSManager *mgr, const char *obj_id, int type,
     int i;
 
     if (type == SEAF_METADATA_TYPE_FILE) {
-        seafile = seaf_fs_manager_get_seafile (mgr, obj_id);
+        seafile = seaf_fs_manager_get_seafile (mgr, repo_id, version, obj_id);
         if (!seafile) {
             g_warning ("[fs mgr] Failed to find file %s.\n", obj_id);
             return FALSE;
@@ -1227,31 +1254,39 @@ fill_blocklist (SeafFSManager *mgr, const char *obj_id, int type,
 
 int
 seaf_fs_manager_populate_blocklist (SeafFSManager *mgr,
+                                    const char *repo_id,
+                                    int version,
                                     const char *root_id,
                                     BlockList *bl)
 {
-    return seaf_fs_manager_traverse_tree (mgr, root_id,
+    return seaf_fs_manager_traverse_tree (mgr, repo_id, version, root_id,
                                           fill_blocklist,
                                           bl, FALSE);
 }
 
 gboolean
-seaf_fs_manager_object_exists (SeafFSManager *mgr, const char *id)
+seaf_fs_manager_object_exists (SeafFSManager *mgr,
+                               const char *repo_id,
+                               int version,
+                               const char *id)
 {
     /* Empty file and dir always exists. */
     if (memcmp (id, EMPTY_SHA1, 40) == 0)
         return TRUE;
 
-    return seaf_obj_store_obj_exists (mgr->obj_store, id);
+    return seaf_obj_store_obj_exists (mgr->obj_store, repo_id, version, id);
 }
 
 gint64
-seaf_fs_manager_get_file_size (SeafFSManager *mgr, const char *file_id)
+seaf_fs_manager_get_file_size (SeafFSManager *mgr,
+                               const char *repo_id,
+                               int version,
+                               const char *file_id)
 {
     Seafile *file;
     gint64 file_size;
 
-    file = seaf_fs_manager_get_seafile (seaf->fs_mgr, file_id);
+    file = seaf_fs_manager_get_seafile (seaf->fs_mgr, repo_id, version, file_id);
     if (!file) {
         seaf_warning ("Couldn't get file %s", file_id);
         return -1;
@@ -1264,7 +1299,7 @@ seaf_fs_manager_get_file_size (SeafFSManager *mgr, const char *file_id)
 }
 
 static gint64
-get_dir_size (SeafFSManager *mgr, const char *id)
+get_dir_size (SeafFSManager *mgr, const char *repo_id, int version, const char *id)
 {
     SeafDir *dir;
     SeafDirent *seaf_dent;
@@ -1272,7 +1307,7 @@ get_dir_size (SeafFSManager *mgr, const char *id)
     gint64 result;
     GList *p;
 
-    dir = seaf_fs_manager_get_seafdir (mgr, id);
+    dir = seaf_fs_manager_get_seafdir (mgr, repo_id, version, id);
     if (!dir)
         return -1;
 
@@ -1280,14 +1315,14 @@ get_dir_size (SeafFSManager *mgr, const char *id)
         seaf_dent = (SeafDirent *)p->data;
 
         if (S_ISREG(seaf_dent->mode)) {
-            result = seaf_fs_manager_get_file_size (mgr, seaf_dent->id);
+            result = seaf_fs_manager_get_file_size (mgr, repo_id, version, seaf_dent->id);
             if (result < 0) {
                 seaf_dir_free (dir);
                 return result;
             }
             size += result;
         } else if (S_ISDIR(seaf_dent->mode)) {
-            result = get_dir_size (mgr, seaf_dent->id);
+            result = get_dir_size (mgr, repo_id, version, seaf_dent->id);
             if (result < 0) {
                 seaf_dir_free (dir);
                 return result;
@@ -1302,15 +1337,17 @@ get_dir_size (SeafFSManager *mgr, const char *id)
 
 gint64
 seaf_fs_manager_get_fs_size (SeafFSManager *mgr,
+                             const char *repo_id,
+                             int version,
                              const char *root_id)
 {
      if (strcmp (root_id, EMPTY_SHA1) == 0)
         return 0;
-     return get_dir_size (mgr, root_id);
+     return get_dir_size (mgr, repo_id, version, root_id);
 }
 
 static int
-count_dir_files (SeafFSManager *mgr, const char *id)
+count_dir_files (SeafFSManager *mgr, const char *repo_id, int version, const char *id)
 {
     SeafDir *dir;
     SeafDirent *seaf_dent;
@@ -1328,7 +1365,7 @@ count_dir_files (SeafFSManager *mgr, const char *id)
         if (S_ISREG(seaf_dent->mode)) {
             count ++;
         } else if (S_ISDIR(seaf_dent->mode)) {
-            result = count_dir_files (mgr, seaf_dent->id);
+            result = count_dir_files (mgr, repo_id, version, seaf_dent->id);
             if (result < 0) {
                 seaf_dir_free (dir);
                 return result;
@@ -1343,15 +1380,19 @@ count_dir_files (SeafFSManager *mgr, const char *id)
 
 int
 seaf_fs_manager_count_fs_files (SeafFSManager *mgr,
+                                const char *repo_id,
+                                int version,
                                 const char *root_id)
 {
      if (strcmp (root_id, EMPTY_SHA1) == 0)
         return 0;
-     return count_dir_files (mgr, root_id);
+     return count_dir_files (mgr, repo_id, version, root_id);
 }
 
 SeafDir *
 seaf_fs_manager_get_seafdir_by_path (SeafFSManager *mgr,
+                                     const char *repo_id,
+                                     int version,
                                      const char *root_id,
                                      const char *path,
                                      GError **error)
@@ -1362,7 +1403,7 @@ seaf_fs_manager_get_seafdir_by_path (SeafFSManager *mgr,
     char *name, *saveptr;
     char *tmp_path = g_strdup(path);
 
-    dir = seaf_fs_manager_get_seafdir (mgr, dir_id);
+    dir = seaf_fs_manager_get_seafdir (mgr, repo_id, version, dir_id);
     if (!dir) {
         g_set_error (error, SEAFILE_DOMAIN, SEAF_ERR_DIR_MISSING, "directory is missing");
         return NULL;
@@ -1389,7 +1430,7 @@ seaf_fs_manager_get_seafdir_by_path (SeafFSManager *mgr,
         }
 
         SeafDir *prev = dir;
-        dir = seaf_fs_manager_get_seafdir (mgr, dir_id);
+        dir = seaf_fs_manager_get_seafdir (mgr, repo_id, version, dir_id);
         seaf_dir_free (prev);
 
         if (!dir) {
@@ -1407,10 +1448,12 @@ seaf_fs_manager_get_seafdir_by_path (SeafFSManager *mgr,
 
 char *
 seaf_fs_manager_path_to_obj_id (SeafFSManager *mgr,
-                                 const char *root_id,
-                                 const char *path,
-                                 guint32 *mode,
-                                 GError **error)
+                                const char *repo_id,
+                                int version,
+                                const char *root_id,
+                                const char *path,
+                                guint32 *mode,
+                                GError **error)
 {
     char *copy = g_strdup (path);
     int off = strlen(copy) - 1;
@@ -1434,7 +1477,7 @@ seaf_fs_manager_path_to_obj_id (SeafFSManager *mgr,
 
     slash = strrchr (copy, '/');
     if (!slash) {
-        base_dir = seaf_fs_manager_get_seafdir (mgr, root_id);
+        base_dir = seaf_fs_manager_get_seafdir (mgr, repo_id, version, root_id);
         if (!base_dir) {
             g_warning ("Failed to find root dir %s.\n", root_id);
             g_set_error (error, SEAFILE_DOMAIN, SEAF_ERR_GENERAL, " ");
@@ -1446,6 +1489,8 @@ seaf_fs_manager_path_to_obj_id (SeafFSManager *mgr,
         name = slash + 1;
         GError *tmp_error = NULL;
         base_dir = seaf_fs_manager_get_seafdir_by_path (mgr,
+                                                        repo_id,
+                                                        version,
                                                         root_id,
                                                         copy,
                                                         &tmp_error);
@@ -1483,6 +1528,8 @@ out:
 
 char *
 seaf_fs_manager_get_seafile_id_by_path (SeafFSManager *mgr,
+                                        const char *repo_id,
+                                        int version,
                                         const char *root_id,
                                         const char *path,
                                         GError **error)
@@ -1490,7 +1537,8 @@ seaf_fs_manager_get_seafile_id_by_path (SeafFSManager *mgr,
     guint32 mode;
     char *file_id;
 
-    file_id = seaf_fs_manager_path_to_obj_id (mgr, root_id, path, &mode, error);
+    file_id = seaf_fs_manager_path_to_obj_id (mgr, repo_id, version,
+                                              root_id, path, &mode, error);
 
     if (!file_id)
         return NULL;
@@ -1505,14 +1553,17 @@ seaf_fs_manager_get_seafile_id_by_path (SeafFSManager *mgr,
 
 char *
 seaf_fs_manager_get_seafdir_id_by_path (SeafFSManager *mgr,
-                                       const char *root_id,
-                                       const char *path,
-                                       GError **error)
+                                        const char *repo_id,
+                                        int version,
+                                        const char *root_id,
+                                        const char *path,
+                                        GError **error)
 {
     guint32 mode = 0;
     char *dir_id;
 
-    dir_id = seaf_fs_manager_path_to_obj_id (mgr, root_id, path, &mode, error);
+    dir_id = seaf_fs_manager_path_to_obj_id (mgr, repo_id, version,
+                                             root_id, path, &mode, error);
 
     if (!dir_id)
         return NULL;
@@ -1601,6 +1652,8 @@ verify_seafdir (const char *dir_id, const uint8_t *data, int len, gboolean verif
                                         
 gboolean
 seaf_fs_manager_verify_seafdir (SeafFSManager *mgr,
+                                const char *repo_id,
+                                int version,
                                 const char *dir_id,
                                 gboolean verify_id,
                                 gboolean *io_error)
@@ -1612,7 +1665,8 @@ seaf_fs_manager_verify_seafdir (SeafFSManager *mgr,
         return TRUE;
     }
 
-    if (seaf_obj_store_read_obj (mgr->obj_store, dir_id, &data, &len) < 0) {
+    if (seaf_obj_store_read_obj (mgr->obj_store, repo_id, version,
+                                 dir_id, &data, &len) < 0) {
         seaf_warning ("[fs mgr] Failed to read dir %s.\n", dir_id);
         *io_error = TRUE;
         return FALSE;
@@ -1665,6 +1719,8 @@ verify_seafile (const char *id, const void *data, int len, gboolean verify_id)
 
 gboolean
 seaf_fs_manager_verify_seafile (SeafFSManager *mgr,
+                                const char *repo_id,
+                                int version,
                                 const char *file_id,
                                 gboolean verify_id,
                                 gboolean *io_error)
@@ -1676,7 +1732,8 @@ seaf_fs_manager_verify_seafile (SeafFSManager *mgr,
         return TRUE;
     }
 
-    if (seaf_obj_store_read_obj (mgr->obj_store, file_id, &data, &len) < 0) {
+    if (seaf_obj_store_read_obj (mgr->obj_store, repo_id, version,
+                                 file_id, &data, &len) < 0) {
         seaf_warning ("[fs mgr] Failed to read file %s.\n", file_id);
         *io_error = TRUE;
         return FALSE;
@@ -1690,6 +1747,8 @@ seaf_fs_manager_verify_seafile (SeafFSManager *mgr,
 
 gboolean
 seaf_fs_manager_verify_object (SeafFSManager *mgr,
+                               const char *repo_id,
+                               int version,
                                const char *obj_id,
                                gboolean verify_id,
                                gboolean *io_error)
@@ -1711,10 +1770,10 @@ seaf_fs_manager_verify_object (SeafFSManager *mgr,
     int type = seaf_metadata_type_from_data (data, len);
     switch (type) {
     case SEAF_METADATA_TYPE_FILE:
-        ret = verify_seafile (obj_id, data, len, verify_id);
+        ret = verify_seafile (obj_id, repo_id, version, data, len, verify_id);
         break;
     case SEAF_METADATA_TYPE_DIR:
-        ret = verify_seafdir (obj_id, data, len, verify_id);
+        ret = verify_seafdir (obj_id, repo_id, version, data, len, verify_id);
         break;
     default:
         seaf_warning ("Invalid meta data type: %d.\n", type);

@@ -224,6 +224,7 @@ seaf_repo_from_commit (SeafRepo *repo, SeafCommit *commit)
         }
     }
     repo->no_local_history = commit->no_local_history;
+    repo->version = commit->version;
 }
 
 void
@@ -242,6 +243,7 @@ seaf_repo_to_commit (SeafRepo *repo, SeafCommit *commit)
         }
     }
     commit->no_local_history = repo->no_local_history;
+    commit->version = repo->version;
 }
 
 static gboolean
@@ -364,13 +366,16 @@ should_ignore(const char *basepath, const char *filename, void *data)
 }
 
 static int
-index_cb (const char *path,
+index_cb (const char *repo_id,
+          int version,
+          const char *path,
           unsigned char sha1[],
           SeafileCrypt *crypt,
           gboolean write_data)
 {
     /* Check in blocks and get object ID. */
-    if (seaf_fs_manager_index_blocks (seaf->fs_mgr, path, sha1, crypt, write_data) < 0) {
+    if (seaf_fs_manager_index_blocks (seaf->fs_mgr, repo_id, version,
+                                      path, sha1, crypt, write_data) < 0) {
         g_warning ("Failed to index file %s.\n", path);
         return -1;
     }
@@ -378,7 +383,9 @@ index_cb (const char *path,
 }
 
 static int
-add_recursive (struct index_state *istate, 
+add_recursive (const char *repo_id,
+               int version,
+               struct index_state *istate, 
                const char *worktree,
                const char *path,
                SeafileCrypt *crypt,
@@ -408,7 +415,7 @@ add_recursive (struct index_state *istate,
     }
 
     if (S_ISREG(st.st_mode)) {
-        ret = add_to_index (istate, path, full_path,
+        ret = add_to_index (repo_id, version, istate, path, full_path,
                             &st, 0, crypt, index_cb);
         g_free (full_path);
         return ret;
@@ -435,7 +442,7 @@ add_recursive (struct index_state *istate,
 #else
             subpath = g_build_path (PATH_SEPERATOR, path, dname, NULL);
 #endif
-            ret = add_recursive (istate, worktree, subpath,
+            ret = add_recursive (repo_id, version, istate, worktree, subpath,
                                  crypt, ignore_empty_dir, ignore_list);
             g_free (subpath);
             if (ret < 0)
@@ -536,7 +543,8 @@ index_add (SeafRepo *repo, struct index_state *istate, const char *path)
 
     ignore_list = seaf_repo_load_ignore_files (repo->worktree);
 
-    if (add_recursive (istate, repo->worktree, path, crypt, FALSE, ignore_list) < 0)
+    if (add_recursive (repo->id, repo->version,
+                       istate, repo->worktree, path, crypt, FALSE, ignore_list) < 0)
         goto error;
 
     remove_deleted (istate, repo->worktree, path, ignore_list);
@@ -557,6 +565,7 @@ error:
  */
 int
 seaf_repo_index_worktree_files (const char *repo_id,
+                                int repo_version,
                                 const char *worktree,
                                 const char *passwd,
                                 int enc_version,
@@ -598,13 +607,15 @@ seaf_repo_index_worktree_files (const char *repo_id,
     /* Add empty dir to index. Otherwise if the repo on relay contains an empty
      * dir, we'll fail to detect fast-forward relationship later.
      */
-    if (add_recursive (&istate, worktree, "", crypt, FALSE, ignore_list) < 0)
+    if (add_recursive (repo_id, repo_version,
+                       &istate, worktree, "", crypt, FALSE, ignore_list) < 0)
         goto error;
 
     remove_deleted (&istate, worktree, "", ignore_list);
 
     it = cache_tree ();
-    if (cache_tree_update (it, istate.cache, istate.cache_nr,
+    if (cache_tree_update (repo_id, repo_version,
+                           it, istate.cache, istate.cache_nr,
                            0, 0, commit_trees_cb) < 0) {
         g_warning ("Failed to build cache tree");
         goto error;
@@ -1004,8 +1015,8 @@ seaf_repo_index_commit (SeafRepo *repo, const char *desc, GError **error)
     }
 
     it = cache_tree ();
-    if (cache_tree_update (it, istate.cache,
-                istate.cache_nr, 0, 0, commit_trees_cb) < 0) {
+    if (cache_tree_update (repo->id, repo->version, it, istate.cache,
+                           istate.cache_nr, 0, 0, commit_trees_cb) < 0) {
         g_warning ("Failed to build cache tree");
         g_set_error (error, SEAFILE_DOMAIN, SEAF_ERR_INTERNAL, "Internal data structure error");
         cache_tree_free (&it);
@@ -1110,15 +1121,17 @@ seaf_repo_checkout_commit (SeafRepo *repo, SeafCommit *commit, gboolean recover_
             discard_index (&istate);
             return -1;
         }
-        fill_tree_descriptor (&trees[0], head->root_id);
+        fill_tree_descriptor (repo->id, repo->version, &trees[0], head->root_id);
         seaf_commit_unref (head);
     } else {
-        fill_tree_descriptor (&trees[0], NULL);
+        fill_tree_descriptor (repo->id, repo->version, &trees[0], NULL);
     }
-    fill_tree_descriptor (&trees[1], commit->root_id);
+    fill_tree_descriptor (repo->id, repo->version, &trees[1], commit->root_id);
 
     /* 2-way merge to the new branch */
     memset(&topts, 0, sizeof(topts));
+    memcpy (topts.repo_id, repo->id, 36);
+    topts.version = repo->version;
     topts.base = repo->worktree;
     topts.head_idx = -1;
     topts.src_index = &istate;
@@ -1243,7 +1256,9 @@ seaf_repo_checkout (SeafRepo *repo, const char *worktree, char **error)
         seaf_warning ("No checkout task found for repo %.10s.\n", repo->id);
         goto error;
     }
-    task->total_files = seaf_fs_manager_count_fs_files (seaf->fs_mgr, commit->root_id);
+    task->total_files = seaf_fs_manager_count_fs_files (seaf->fs_mgr,
+                                                        repo->id, repo->version,
+                                                        commit->root_id);
 
     if (task->total_files < 0) {
         seaf_warning ("Failed to count files for repo %.10s .\n", repo->id);
@@ -1859,8 +1874,9 @@ load_repo_commit (SeafRepoManager *manager,
 {
     SeafCommit *commit;
 
-    commit = seaf_commit_manager_get_commit (manager->seaf->commit_mgr,
-                                             branch->commit_id);
+    commit = seaf_commit_manager_get_commit_compatible (manager->seaf->commit_mgr,
+                                                        repo->id,
+                                                        branch->commit_id);
     if (!commit) {
         g_warning ("Commit %s is missing\n", branch->commit_id);
         repo->is_corrupted = TRUE;
@@ -2011,8 +2027,10 @@ load_repo (SeafRepoManager *manager, const char *repo_id)
         if (branch != NULL) {
              SeafCommit *commit;
 
-             commit = seaf_commit_manager_get_commit (manager->seaf->commit_mgr,
-                                                      branch->commit_id);
+             commit =
+                 seaf_commit_manager_get_commit_compatible (manager->seaf->commit_mgr,
+                                                            repo->id,
+                                                            branch->commit_id);
              if (commit) {
                  seaf_repo_from_commit (repo, commit);
                  seaf_commit_unref (commit);

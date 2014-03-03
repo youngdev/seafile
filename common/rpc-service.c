@@ -87,16 +87,19 @@ convert_repo_list (GList *inner_repos)
 }
 
 GList *
-seafile_list_dir_by_path(const char *commit_id, const char *path, GError **error)
+seafile_list_dir_by_path(const char *repo_id, int version, const char *commit_id,
+                         const char *path, GError **error)
 {
-    if (!commit_id || !path) {
+    if (!repo_id || !is_uuid_valid (repo_id) || !commit_id || !path) {
         g_set_error (error, SEAFILE_DOMAIN, SEAF_ERR_BAD_ARGS,
                      "Args can't be NULL");
         return NULL;
     }
 
     SeafCommit *commit;
-    commit = seaf_commit_manager_get_commit(seaf->commit_mgr, commit_id);
+    commit = seaf_commit_manager_get_commit (seaf->commit_mgr,
+                                             repo_id, version,
+                                             commit_id);
 
     if (!commit) {
         g_set_error (error, SEAFILE_DOMAIN, SEAF_ERR_BAD_COMMIT, "No such commit");
@@ -119,7 +122,10 @@ seafile_list_dir_by_path(const char *commit_id, const char *path, GError **error
     GList *ptr;
     GList *res = NULL;
 
-    dir = seaf_fs_manager_get_seafdir_by_path (seaf->fs_mgr, commit->root_id,
+    dir = seaf_fs_manager_get_seafdir_by_path (seaf->fs_mgr,
+                                               repo_id,
+                                               commit->version,
+                                               commit->root_id,
                                                p, error);
     if (!dir) {
         seaf_warning ("Can't find seaf dir for %s\n", path);
@@ -147,17 +153,20 @@ seafile_list_dir_by_path(const char *commit_id, const char *path, GError **error
 }
 
 char *
-seafile_get_dirid_by_path(const char *commit_id, const char *path, GError **error)
+seafile_get_dirid_by_path(const char *repo_id, int version,
+                          const char *commit_id, const char *path, GError **error)
 {
     char *res = NULL;
-    if (!commit_id || !path) {
+    if (!repo_id || !is_uuid_valid(repo_id) || !commit_id || !path) {
         g_set_error (error, SEAFILE_DOMAIN, SEAF_ERR_BAD_ARGS,
                      "Args can't be NULL");
         return NULL;
     }
 
     SeafCommit *commit;
-    commit = seaf_commit_manager_get_commit(seaf->commit_mgr, commit_id);
+    commit = seaf_commit_manager_get_commit (seaf->commit_mgr,
+                                             repo_id, version,
+                                             commit_id);
 
     if (!commit) {
         g_set_error (error, SEAFILE_DOMAIN, SEAF_ERR_BAD_COMMIT, "No such commit");
@@ -174,7 +183,10 @@ seafile_get_dirid_by_path(const char *commit_id, const char *path, GError **erro
     }
 
     SeafDir *dir;
-    dir = seaf_fs_manager_get_seafdir_by_path (seaf->fs_mgr, commit->root_id,
+    dir = seaf_fs_manager_get_seafdir_by_path (seaf->fs_mgr,
+                                               reop_id,
+                                               commit->version,
+                                               commit->root_id,
                                                p, error);
     if (!dir) {
         seaf_warning ("Can't find seaf dir for %s\n", path);
@@ -885,90 +897,6 @@ int seafile_is_auto_sync_enabled (GError **error)
 /*
  * RPC functions available for both clients and server.
  */
-
-char *
-seafile_list_file (const char *file_id, int offset, int limit, GError **error)
-{
-    Seafile *file;
-    GString *buf = g_string_new ("");
-    int index = 0;
-
-    if (file_id == NULL) {
-        g_set_error (error, SEAFILE_DOMAIN, SEAF_ERR_BAD_DIR_ID, "Bad file id");
-        return NULL;
-    }
-    file = seaf_fs_manager_get_seafile (seaf->fs_mgr, file_id);
-    if (!file) {
-        g_set_error (error, SEAFILE_DOMAIN, SEAF_ERR_BAD_DIR_ID, "Bad file id");
-        return NULL;
-    }
-
-    if (offset < 0)
-        offset = 0;
-
-    for (index = 0; index < file->n_blocks; index++) {
-        if (index < offset) {
-            continue;
-        }
-
-        if (limit > 0) {
-            if (index >= offset + limit)
-                break;
-        }
-        g_string_append_printf (buf, "%s\n", file->blk_sha1s[index]);
-    }
-
-    seafile_unref (file);
-    return g_string_free (buf, FALSE);
-}
-
-GList *
-seafile_list_dir (const char *dir_id, int offset, int limit, GError **error)
-{
-    SeafDir *dir;
-    SeafDirent *dent;
-    SeafileDirent *d;
-    GList *res = NULL;
-    GList *p;
-
-    if (dir_id == NULL) {
-        g_set_error (error, SEAFILE_DOMAIN, SEAF_ERR_BAD_DIR_ID, "Bad dir id");
-        return NULL;
-    }
-    dir = seaf_fs_manager_get_seafdir (seaf->fs_mgr, dir_id);
-    if (!dir) {
-        g_set_error (error, SEAFILE_DOMAIN, SEAF_ERR_BAD_DIR_ID, "Bad dir id");
-        return NULL;
-    }
-
-    if (offset < 0) {
-        offset = 0;
-    }
-
-    int index = 0;
-    for (p = dir->entries; p != NULL; p = p->next, index++) {
-        if (index < offset) {
-            continue;
-        }
-
-        if (limit > 0) {
-            if (index >= offset + limit)
-                break;
-        }
-
-        dent = p->data;
-        d = g_object_new (SEAFILE_TYPE_DIRENT,
-                          "obj_id", dent->id,
-                          "obj_name", dent->name,
-                          "mode", dent->mode,
-                          NULL);
-        res = g_list_prepend (res, d);
-    }
-
-    seaf_dir_free (dir);
-    res = g_list_reverse (res);
-    return res;
-}
 
 GList *
 seafile_branch_gets (const char *repo_id, GError **error)
@@ -2578,7 +2506,8 @@ seafile_list_org_inner_pub_repos_by_owner (int org_id,
 }
 
 gint64
-seafile_get_file_size (const char *file_id, GError **error)
+seafile_get_file_size (const char *repo_id, int version,
+                       const char *file_id, GError **error)
 {
     gint64 file_size;
 
@@ -2588,7 +2517,7 @@ seafile_get_file_size (const char *file_id, GError **error)
         return -1;
     }
 
-    file_size = seaf_fs_manager_get_file_size (seaf->fs_mgr, file_id);
+    file_size = seaf_fs_manager_get_file_size (seaf->fs_mgr, repo_id, version, file_id);
     if (file_size < 0) {
         g_set_error (error, SEAFILE_DOMAIN, SEAF_ERR_INTERNAL,
                      "failed to read file size");
@@ -2599,7 +2528,8 @@ seafile_get_file_size (const char *file_id, GError **error)
 }
 
 gint64
-seafile_get_dir_size (const char *dir_id, GError **error)
+seafile_get_dir_size (const char *repo_id, int version,
+                      const char *dir_id, GError **error)
 {
     gint64 dir_size;
 
@@ -2609,7 +2539,7 @@ seafile_get_dir_size (const char *dir_id, GError **error)
         return -1;
     }
 
-    dir_size = seaf_fs_manager_get_fs_size (seaf->fs_mgr, dir_id);
+    dir_size = seaf_fs_manager_get_fs_size (seaf->fs_mgr, repo_id, version, dir_id);
     if (dir_size < 0) {
         g_set_error (error, SEAFILE_DOMAIN, SEAF_ERR_BAD_ARGS,
                      "Failed to caculate dir size");
@@ -3338,6 +3268,7 @@ get_obj_id_by_path (const char *repo_id,
     }
 
     commit = seaf_commit_manager_get_commit (seaf->commit_mgr,
+                                             repo->id, repo->version,
                                              repo->head->commit_id);
     if (!commit) {
         g_set_error (error, SEAFILE_DOMAIN, SEAF_ERR_INTERNAL,
@@ -3346,7 +3277,9 @@ get_obj_id_by_path (const char *repo_id,
     }
 
     guint32 mode = 0;
-    obj_id = seaf_fs_manager_path_to_obj_id (seaf->fs_mgr, commit->root_id,
+    obj_id = seaf_fs_manager_path_to_obj_id (seaf->fs_mgr,
+                                             repo->id, repo->version,
+                                             commit->root_id,
                                              path, &mode, error);
 
 out:
@@ -3377,6 +3310,95 @@ char *seafile_get_dir_id_by_path (const char *repo_id,
                                   GError **error)
 {
     return get_obj_id_by_path (repo_id, path, TRUE, error);
+}
+
+char *
+seafile_list_file (const char *repo_id, int version,
+                   const char *file_id, int offset, int limit, GError **error)
+{
+    Seafile *file;
+    GString *buf = g_string_new ("");
+    int index = 0;
+
+    if (!repo_id || !is_uuid_valid(repo_id) || file_id == NULL) {
+        g_set_error (error, SEAFILE_DOMAIN, SEAF_ERR_BAD_DIR_ID, "Bad file id");
+        return NULL;
+    }
+
+    file = seaf_fs_manager_get_seafile (seaf->fs_mgr, repo_id, version, file_id);
+    if (!file) {
+        g_set_error (error, SEAFILE_DOMAIN, SEAF_ERR_BAD_DIR_ID, "Bad file id");
+        return NULL;
+    }
+
+    if (offset < 0)
+        offset = 0;
+
+    for (index = 0; index < file->n_blocks; index++) {
+        if (index < offset) {
+            continue;
+        }
+
+        if (limit > 0) {
+            if (index >= offset + limit)
+                break;
+        }
+        g_string_append_printf (buf, "%s\n", file->blk_sha1s[index]);
+    }
+
+    seafile_unref (file);
+    return g_string_free (buf, FALSE);
+}
+
+GList *
+seafile_list_dir (const char *repo_id, int version,
+                  const char *dir_id, int offset, int limit, GError **error)
+{
+    SeafDir *dir;
+    SeafDirent *dent;
+    SeafileDirent *d;
+    GList *res = NULL;
+    GList *p;
+
+    if (!repo_id || !is_uuid_valid(repo_id) || dir_id == NULL) {
+        g_set_error (error, SEAFILE_DOMAIN, SEAF_ERR_BAD_DIR_ID, "Bad dir id");
+        return NULL;
+    }
+
+    dir = seaf_fs_manager_get_seafdir (seaf->fs_mgr,
+                                       repo_id, version, dir_id);
+    if (!dir) {
+        g_set_error (error, SEAFILE_DOMAIN, SEAF_ERR_BAD_DIR_ID, "Bad dir id");
+        return NULL;
+    }
+
+    if (offset < 0) {
+        offset = 0;
+    }
+
+    int index = 0;
+    for (p = dir->entries; p != NULL; p = p->next, index++) {
+        if (index < offset) {
+            continue;
+        }
+
+        if (limit > 0) {
+            if (index >= offset + limit)
+                break;
+        }
+
+        dent = p->data;
+        d = g_object_new (SEAFILE_TYPE_DIRENT,
+                          "obj_id", dent->id,
+                          "obj_name", dent->name,
+                          "mode", dent->mode,
+                          NULL);
+        res = g_list_prepend (res, d);
+    }
+
+    seaf_dir_free (dir);
+    res = g_list_reverse (res);
+    return res;
 }
 
 GList *
@@ -3668,28 +3690,33 @@ seafile_set_org_group_repo_permission (int org_id,
 }
 
 char *
-seafile_get_file_id_by_commit_and_path(const char *commit_id,
+seafile_get_file_id_by_commit_and_path(const char *repo_id,
+                                       int version,
+                                       const char *commit_id,
                                        const char *path,
                                        GError **error)
 {
     SeafCommit *commit;
     char *file_id;
 
-    if (!commit_id || !path) {
+    if (!repo_id || !is_uuid_valid(repo_id) || !commit_id || !path) {
         g_set_error (error, SEAFILE_DOMAIN, SEAF_ERR_BAD_ARGS,
                      "Arguments should not be empty");
         return NULL;
     }
 
-    commit = seaf_commit_manager_get_commit(seaf->commit_mgr, commit_id);
+    commit = seaf_commit_manager_get_commit(seaf->commit_mgr,
+                                            repo_id,
+                                            version,
+                                            commit_id);
     if (!commit) {
         g_set_error (error, SEAFILE_DOMAIN, SEAF_ERR_BAD_ARGS,
                      "bad commit id");
         return NULL;
     }
 
-    file_id = seaf_fs_manager_path_to_obj_id (seaf->fs_mgr,
-                        commit->root_id, path, NULL, error);
+    file_id = seaf_fs_manager_path_to_obj_id (seaf->fs_mgr, repo_id, commit->version,
+                                              commit->root_id, path, NULL, error);
 
     seaf_commit_unref(commit);
 

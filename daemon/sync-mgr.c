@@ -536,6 +536,7 @@ start_upload_if_necessary (SyncTask *task)
 
     char *tx_id = seaf_transfer_manager_add_upload (seaf->transfer_mgr,
                                                     repo_id,
+                                                    task->repo->version,
                                                     task->dest_id,
                                                     "local",
                                                     "master",
@@ -559,6 +560,7 @@ start_fetch_if_necessary (SyncTask *task)
 
     tx_id = seaf_transfer_manager_add_download (seaf->transfer_mgr,
                                                 repo_id,
+                                                task->repo->version,
                                                 task->dest_id,
                                                 "fetch_head",
                                                 "master",
